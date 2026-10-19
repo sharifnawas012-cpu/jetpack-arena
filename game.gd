@@ -6,6 +6,7 @@ const WorldScript := preload("res://scripts/world.gd")
 const FxScript := preload("res://scripts/fx.gd")
 const HudScript := preload("res://scripts/hud.gd")
 const TouchScript := preload("res://scripts/touch.gd")
+const TapHelper := preload("res://scripts/tap_helper.gd")
 
 const GRAV := 1500.0
 const RUN := 270.0
@@ -183,6 +184,9 @@ func _build_ui() -> void:
 	notice.add_theme_font_size_override("font_size", 30)
 	notice.visible = false
 	layer.add_child(notice)
+	var ph := TapHelper.new()
+	ph.root = pause_ui
+	pause_ui.add_child(ph)
 	Net.host_lost.connect(_on_host_lost)
 
 func _on_host_lost(reason: String) -> void:
@@ -936,6 +940,9 @@ func show_results(res: Array, win: String) -> void:
 	result_ui.layer = 30
 	result_ui.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(result_ui)
+	var rh := TapHelper.new()
+	rh.root = result_ui
+	result_ui.add_child(rh)
 	var dim := ColorRect.new()
 	dim.color = Color(0.03, 0.05, 0.1, 0.9)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)

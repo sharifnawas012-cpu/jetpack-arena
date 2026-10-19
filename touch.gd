@@ -36,6 +36,8 @@ func _layout() -> void:
 func _input(e: InputEvent) -> void:
 	if not visible or game == null:
 		return
+	if game.ended or (game.pause_ui != null and game.pause_ui.visible and e is InputEventScreenTouch and not (btns.has("pause") and e.position.distance_to(btns["pause"][0]) < 40.0)):
+		return
 	if btns.is_empty() or btns["pause"][0].x != size.x - 50.0:
 		_layout()
 	if e is InputEventScreenTouch:

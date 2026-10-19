@@ -1,4 +1,5 @@
 extends Control
+const TapHelper := preload("res://scripts/tap_helper.gd")
 ## All menu screens, built in code: main, practice, local multiplayer, host, join, lobby, settings, help.
 
 var content: VBoxContainer
@@ -10,6 +11,7 @@ var join_code: LineEdit
 var found_box: VBoxContainer
 var lobby_box: VBoxContainer
 var _t := 0.0
+var scroll_ref: ScrollContainer
 
 func _ready() -> void:
 	var th := Theme.new()
@@ -27,10 +29,15 @@ func _ready() -> void:
 	var sc := ScrollContainer.new()
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	mc.add_child(sc)
+	scroll_ref = sc
 	content = VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation", 12)
 	sc.add_child(content)
+	var helper := TapHelper.new()
+	helper.root = self
+	helper.scroll = scroll_ref
+	add_child(helper)
 	Net.lobby_changed.connect(_on_lobby_changed)
 	Net.joined.connect(_on_joined)
 	Net.join_failed.connect(_on_join_failed)
