@@ -11,10 +11,10 @@ jobs:
       - name: Organize flat upload into folders
         run: |
           mkdir -p scripts scenes config tests docs
-          mv -n cfg.gd sfx.gd net.gd fighter.gd world.gd fx.gd game.gd hud.gd touch.gd menu.gd scripts/ || true
-          mv -n main.tscn game.tscn scenes/ || true
+          mv -n smoke_solo.gd smoke_solo.tscn net_test.gd net_test.tscn touch_menu.gd touch_menu.tscn tests/ || true
+          mv -n *.gd scripts/ || true
+          mv -n *.tscn scenes/ || true
           mv -n weapons.json config/ || true
-          mv -n smoke_solo.gd smoke_solo.tscn net_test.gd net_test.tscn tests/ || true
           mv -n android_build.md networking_troubleshooting.md docs/ || true
           rm -f icon.svg.import
       - uses: actions/setup-java@v5
