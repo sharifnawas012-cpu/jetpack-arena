@@ -5,7 +5,7 @@ env:
   GODOT_VERSION: "4.3"
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Organize flat upload into folders
@@ -17,14 +17,13 @@ jobs:
           mv -n smoke_solo.gd smoke_solo.tscn net_test.gd net_test.tscn tests/ || true
           mv -n android_build.md networking_troubleshooting.md docs/ || true
           rm -f icon.svg.import
-          ls -R | head -60
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
       - name: Install Android packages
-        run: yes | sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
+        run: | yes | sdkmanager --licenses > /dev/null || true sdkmanager "platform-tools" "build-tools;34.0.0" "platforms;android-34"
       - name: Install Godot and export templates
         run: |
           B=https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}-stable
