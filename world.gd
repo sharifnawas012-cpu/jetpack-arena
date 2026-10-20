@@ -57,5 +57,11 @@ func _draw() -> void:
 	for s in map.solids:
 		var r: Rect2 = s
 		draw_rect(r, solid)
-		draw_rect(Rect2(r.position, Vector2(r.size.x, minf(5.0, r.size.y))), edge)
+		var hx := r.position.x + 20.0
+		while hx < r.end.x - 4.0 and r.size.y > 20.0:
+			draw_line(Vector2(hx, r.position.y + 8.0), Vector2(hx, r.end.y - 3.0), Color(0, 0, 0, 0.13), 2.0)
+			hx += 40.0
+		draw_rect(Rect2(r.position + Vector2(0, r.size.y - minf(6.0, r.size.y * 0.3)), Vector2(r.size.x, minf(6.0, r.size.y * 0.3))), Color(0, 0, 0, 0.28))
+		draw_rect(Rect2(r.position, Vector2(r.size.x, minf(9.0, r.size.y))), edge)
+		draw_rect(Rect2(r.position + Vector2(0, minf(9.0, r.size.y)), Vector2(r.size.x, minf(3.0, r.size.y))), Color(0, 0, 0, 0.18))
 	draw_rect(Rect2(0, 0, w, h), Color(edge, 0.55), false, 4.0)

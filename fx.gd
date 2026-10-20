@@ -20,6 +20,12 @@ func spark(p: Vector2, col: Color, n: int) -> void:
 		var v := Vector2.from_angle(a) * randf_range(40.0, 260.0)
 		parts.append([p, v, 0.0, randf_range(0.2, 0.5), col, randf_range(2.0, 4.5)])
 
+func puff(p: Vector2, v: Vector2) -> void:
+	if parts.size() >= MAX_PARTS:
+		parts.pop_front()
+	var warm := randf() < 0.55
+	parts.append([p, v, 0.0, randf_range(0.25, 0.45), Color(1.0, 0.65, 0.2) if warm else Color(0.7, 0.7, 0.72), randf_range(3.0, 6.0)])
+
 func boom(p: Vector2, r: float) -> void:
 	rings.append([p, r, 0.0])
 	spark(p, Color(1, 0.6, 0.15), 18)

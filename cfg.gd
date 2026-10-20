@@ -17,7 +17,7 @@ const KIND_FLAME := 3
 var weapons: Array = []
 var maps: Array = []
 var prefs: Dictionary = {"name": "Player", "volume": 0.8, "ui_scale": 1.0, "touch": 0, "fps": 60,
-	"last_ip": "", "touch_opacity": 0.75, "zoom_w": 1600.0}
+	"last_ip": "", "touch_opacity": 0.75, "zoom_w": 1350.0}
 
 func _ready() -> void:
 	_load_weapons()

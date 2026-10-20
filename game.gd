@@ -11,8 +11,8 @@ const TapHelper := preload("res://scripts/tap_helper.gd")
 const GRAV := 1500.0
 const RUN := 270.0
 const JUMP := 520.0
-const HALF := Vector2(11, 20)
-const SIZE := Vector2(22, 40)
+const HALF := Vector2(20, 38)
+const SIZE := Vector2(40, 76)
 const SNAP_DT := 1.0 / 30.0
 const IN_DT := 1.0 / 30.0
 const STATE_DT := 0.5
@@ -67,6 +67,7 @@ var result_ui: CanvasLayer
 var fighter_root: Node2D
 var notice: Label
 var items: Array = []
+var jet_acc := 0.0
 var clouds: Array = []
 var zoom_on := false
 var zoom_k := 1.0
@@ -106,6 +107,7 @@ func _ready() -> void:
 		f.team = int(r.team)
 		f.is_bot = bool(r.bot)
 		f.color = Cfg.TEAM_COLORS[f.team % 4] if team_mode else Cfg.FFA_COLORS[idx % 12]
+		f.style = idx % 4
 		fighter_root.add_child(f)
 		fighters[f.id] = f
 		order.append(f.id)
@@ -317,6 +319,12 @@ func _process(dt: float) -> void:
 	if not is_host and not ended:
 		view_age += dt
 		time_left = maxf(0.0, time_left - dt)
+	jet_acc += dt
+	if jet_acc > 0.04:
+		jet_acc = 0.0
+		for f: Fighter in fighters.values():
+			if f.alive and f.jets:
+				fx.puff(f.pos + Vector2(-f.facing * 18.0, 40.0), Vector2(randf_range(-40.0, 40.0), randf_range(120.0, 210.0)))
 	var i := feed.size() - 1
 	while i >= 0:
 		feed[i][2] -= dt
@@ -519,7 +527,7 @@ func _fire(f: Fighter) -> void:
 	f.fire_cd = 1.0 / float(w.rate)
 	f.flash = 0.06
 	var dir := Vector2.from_angle(f.aim)
-	var mp := f.pos + Vector2(0, 2) + dir * 26.0
+	var mp := f.pos + Vector2(0, -8) + dir * 58.0
 	for i in int(w.pellets):
 		var b: Bullet = _new_bullet()
 		if b == null:
@@ -573,14 +581,14 @@ func _melee(f: Fighter) -> void:
 	f.melee_cd = 0.5
 	f.melee_t = 0.2
 	var dir := Vector2.from_angle(f.aim)
-	var c := f.pos + dir * 30.0
+	var c := f.pos + dir * 54.0
 	Sfx.play("heavy", f.pos)
 	for o: Fighter in fighters.values():
 		if o == f or not o.alive:
 			continue
 		if o.team == f.team and not bool(S.friendly_fire):
 			continue
-		if o.pos.distance_to(c) <= 38.0:
+		if o.pos.distance_to(c) <= 66.0:
 			damage(o, 45.0 * float(S.dmg_mult) * (2.0 if f.dmg_t > 0.0 else 1.0), f.id, -3)
 			o.vel += dir * 380.0 + Vector2(0.0, -120.0)
 			fx.spark(o.pos, Color(1, 0.3, 0.2), 6)
@@ -778,7 +786,7 @@ func _explode(p: Vector2, r: float, dmg: float, owner_id: int, team: int, wi: in
 		if not f.alive:
 			continue
 		var d := f.pos.distance_to(p)
-		var reach := r + 18.0
+		var reach := r + 34.0
 		if d > reach:
 			continue
 		var fall := 1.0 - d / reach
@@ -856,10 +864,15 @@ func _sim_crates(dt: float) -> void:
 				break
 
 # ------------------------------------------------------------------ bots
+func _wrange(wi: int) -> float:
+	var w: Dictionary = Cfg.weapons[wi]
+	return minf(float(w.speed) * float(w.life), 900.0)
+
 func _bot_think(f: Fighter, dt: float) -> void:
 	var d := clampi(int(S.bot_diff), 0, 2)
 	var inp: Dictionary = f.inp
 	f.bot_t -= dt
+	f.bot_flee_t = maxf(0.0, f.bot_flee_t - dt)
 	if f.bot_t <= 0.0 and f.alive:
 		f.bot_t = [0.5, 0.35, 0.2][d] * randf_range(0.7, 1.3)
 		var best := 1e9
@@ -876,38 +889,94 @@ func _bot_think(f: Fighter, dt: float) -> void:
 			f.bot_los = not _blocked(f.pos, tf.pos)
 			if randf() < 0.4:
 				f.bot_strafe = -f.bot_strafe
-			if randf() < 0.12:
-				acts[f.id].append(2)
-			if f.bot_los and best > 180.0 and best < 560.0 and randf() < 0.08 * float(d + 1):
+			if randf() < 0.25:
+				var s0 := absf(_wrange(int(f.slots[f.slot])) - best * 1.3)
+				var s1 := absf(_wrange(int(f.slots[1 - f.slot])) - best * 1.3)
+				if s1 < s0 - 80.0:
+					acts[f.id].append(2)
+			if f.bot_los and best > 180.0 and best < 560.0 and randf() < 0.08 * float(d + 1) and f.nade_cd <= 0.0:
+				var r := randf()
+				f.gtype = 0 if r < 0.7 else (3 if r < 0.88 else 2)
 				acts[f.id].append(1)
-		var ahead := Vector2(signf(float(inp.mx)) * 20.0, -6.0)
-		f.bot_block = _point_solid(f.pos + ahead) or _point_solid(f.pos + ahead + Vector2(0, -18))
+		# where to go: health when hurt, otherwise weapons / power-ups when idle or far away
+		f.bot_has = false
+		if f.hp < 40.0:
+			var bd := 1e9
+			for it in items:
+				if int(it.ty) == 0 and f.pos.distance_to(it.pos) < bd:
+					bd = f.pos.distance_to(it.pos)
+					f.bot_dest = it.pos
+					f.bot_has = true
+		if not f.bot_has and (tf == null or best > 700.0):
+			var bd2 := 900.0
+			for c in crates:
+				if int(c.w) >= 0 and f.pos.distance_to(c.pos) < bd2:
+					bd2 = f.pos.distance_to(c.pos)
+					f.bot_dest = c.pos
+					f.bot_has = true
+			for it in items:
+				if int(it.ty) >= 0 and f.pos.distance_to(it.pos) < bd2:
+					bd2 = f.pos.distance_to(it.pos)
+					f.bot_dest = it.pos
+					f.bot_has = true
+		# dodge incoming rockets / grenades
+		for pb: Bullet in pool:
+			if pb.active and (pb.kind == Cfg.KIND_ROCKET or pb.kind == Cfg.KIND_GRENADE) and pb.owner_id != f.id and pb.pos.distance_to(f.pos) < 170.0:
+				f.bot_flee = (f.pos - pb.pos).normalized()
+				f.bot_flee_t = 0.6
+				break
+		var sx := signf(float(inp.mx))
+		var ahead := Vector2(sx * 34.0, -8.0)
+		f.bot_block = _point_solid(f.pos + ahead) or _point_solid(f.pos + ahead + Vector2(0, -34.0)) or _point_solid(f.pos + ahead + Vector2(0, 30.0))
 	var tgt: Fighter = fighters.get(f.bot_target)
-	if tgt == null or not tgt.alive:
-		inp["fire"] = false
-		inp["mx"] = f.bot_strafe * 0.5
-		inp["jet"] = f.pos.y > float(map.h) * 0.55
-		inp["my"] = 0.0
-		return
-	var to := tgt.pos - f.pos
-	if to.length() < 44.0 and f.melee_cd <= 0.0 and randf() < 0.08:
-		acts[f.id].append(3)
-	var err: float = [0.30, 0.13, 0.05][d]
-	inp["aim"] = to.angle() + sin(elapsed * 2.7 + float(f.id)) * err
-	var pref := 360.0
-	var ax := absf(to.x)
-	if ax > pref + 80.0:
-		inp["mx"] = signf(to.x)
-	elif ax < pref * 0.5:
-		inp["mx"] = -signf(to.x)
+	var have := tgt != null and tgt.alive
+	var to := Vector2.ZERO
+	if have:
+		to = tgt.pos - f.pos
+		if to.length() < 72.0 and f.melee_cd <= 0.0 and randf() < 0.08:
+			acts[f.id].append(3)
+		var err: float = [0.30, 0.13, 0.05][d]
+		inp["aim"] = to.angle() + sin(elapsed * 2.7 + float(f.id)) * err
+		var rng := _wrange(int(f.slots[f.slot]))
+		inp["fire"] = f.bot_los and to.length() < rng and randf() < [0.5, 0.75, 0.95][d]
 	else:
-		inp["mx"] = f.bot_strafe * 0.6
-	var up := to.y < -70.0
-	inp["jet"] = up or f.bot_block or (f.pos.y > float(map.h) - 150.0 and to.y < 40.0)
-	inp["my"] = -1.0 if (up or f.bot_block) else (0.5 if to.y > 90.0 else 0.0)
-	var w: Dictionary = Cfg.weapons[int(f.slots[f.slot])]
-	var rng := minf(float(w.speed) * float(w.life), 900.0)
-	inp["fire"] = f.bot_los and to.length() < rng and randf() < [0.5, 0.75, 0.95][d]
+		inp["fire"] = false
+	var mx := 0.0
+	var my := 0.0
+	var jet := false
+	if f.bot_flee_t > 0.0:
+		mx = signf(f.bot_flee.x)
+		my = clampf(f.bot_flee.y, -1.0, 1.0)
+		jet = true
+	elif f.hp < 30.0 and have and to.length() < 500.0:
+		mx = -signf(to.x)
+		my = -0.6
+		jet = true
+	elif f.bot_has and (not have or f.hp < 40.0):
+		var dv := f.bot_dest - f.pos
+		mx = signf(dv.x) if absf(dv.x) > 24.0 else 0.0
+		jet = dv.y < -40.0 or f.bot_block
+		my = -1.0 if dv.y < -40.0 else (0.5 if dv.y > 60.0 else 0.0)
+	elif have:
+		var pref := 360.0
+		var ax := absf(to.x)
+		if ax > pref + 80.0:
+			mx = signf(to.x)
+		elif ax < pref * 0.5:
+			mx = -signf(to.x)
+		else:
+			mx = f.bot_strafe * 0.6
+		var up := to.y < -90.0
+		jet = up or f.bot_block or (f.pos.y > float(map.h) - 170.0 and to.y < 40.0)
+		my = -1.0 if (up or f.bot_block) else (0.5 if to.y > 110.0 else 0.0)
+	else:
+		mx = f.bot_strafe * 0.5
+		jet = f.pos.y > float(map.h) * 0.55
+	if f.bot_block and f.on_floor and randf() < 0.05:
+		f.jump_req = true
+	inp["mx"] = mx
+	inp["my"] = my
+	inp["jet"] = jet
 
 # ------------------------------------------------------------------ networking (snapshots)
 func _push64(a: PackedFloat64Array, v: float) -> void:

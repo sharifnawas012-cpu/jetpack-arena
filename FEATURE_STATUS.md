@@ -19,3 +19,11 @@ Legend: DONE+TESTED = verified by headless automated run in the sandbox; DONE = 
 | Host migration | NOT DONE |
 | Art/audio | Placeholder shapes + generated beeps |
 | APK | NOT BUILT here (Android SDK not reachable from sandbox). Use the included GitHub workflow or docs/android_build.md; workflow and export preset are unverified. |
+
+
+## Update 4 (verified by headless tests + real rendered screenshots in a virtual display)
+- Larger animated cartoon soldiers (outline, shading, 4 helmet/hair styles, run/jump/jet/land/shoot/melee/death/spawn animations): DONE (look verified in screenshots; feel on phone untested)
+- Weapon art: 9 distinct original silhouettes: DONE
+- Bots: fight each other and the player (11 bot-vs-bot kills in 25 s test), seek health/weapons/power-ups, retreat when hurt, dodge rockets/grenades, use gas/smoke/frag, melee: DONE (still no real pathfinding)
+- Melee, health packs, 3 power-ups, 4 grenade types, zoom, 8 maps: DONE
+- NOT DONE: Capture the Flag, Co-op Survival, crouch, drop-weapon button, dual-wield, control layout editor, character selection screen
