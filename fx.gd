@@ -5,6 +5,12 @@ const MAX_PARTS := 260
 var game
 var parts: Array = []   # [pos, vel, life, maxlife, color, size]
 var rings: Array = []   # [pos, radius, t]
+var clouds: Array = []  # [pos, kind, t, dur]
+
+func cloud(p: Vector2, kind: int, dur: float) -> void:
+	if clouds.size() >= 8:
+		clouds.pop_front()
+	clouds.append([p, kind, 0.0, dur])
 
 func spark(p: Vector2, col: Color, n: int) -> void:
 	for i in n:
@@ -29,6 +35,12 @@ func _process(dt: float) -> void:
 		else:
 			pt[0] += pt[1] * dt
 			pt[1] = pt[1] * (1.0 - 2.5 * dt)
+		i -= 1
+	i = clouds.size() - 1
+	while i >= 0:
+		clouds[i][2] += dt
+		if clouds[i][2] >= clouds[i][3]:
+			clouds.remove_at(i)
 		i -= 1
 	i = rings.size() - 1
 	while i >= 0:
@@ -82,6 +94,25 @@ func _draw() -> void:
 			var p := Vector2(bs[k], bs[k + 1]) + Vector2.from_angle(ang) * spd * minf(age, 0.12)
 			_draw_bullet(p, ang, spd, int(bs[k + 4]))
 			k += 5
+	for it in game.items:
+		var ty: int = it.ty
+		if ty < 0:
+			continue
+		var ip: Vector2 = it.pos
+		var cols := [Color(0.95, 0.3, 0.4), Color(1, 0.9, 0.2), Color(0.3, 0.8, 1), Color(1, 0.45, 0.2)]
+		var lab := ["+", "S", "O", "X2"]
+		var bob := sin(Time.get_ticks_msec() * 0.005 + ip.x) * 3.0
+		draw_circle(ip + Vector2(0, bob), 15.0, cols[ty])
+		draw_arc(ip + Vector2(0, bob), 15.0, 0.0, TAU, 20, Color(1, 1, 1, 0.9), 2.0)
+		draw_string(font, ip + Vector2(-15, 7 + bob), lab[ty], HORIZONTAL_ALIGNMENT_CENTER, 30, 18, Color(1, 1, 1))
+	for c in clouds:
+		var t: float = c[2] / c[3]
+		var base: Color = Color(0.75, 0.75, 0.78) if int(c[1]) == 2 else Color(0.4, 0.9, 0.25)
+		var fade := 1.0 - maxf(0.0, (t - 0.7) / 0.3)
+		for k in 7:
+			var off := Vector2.from_angle(k * 0.9 + t * 0.4) * (30.0 + 12.0 * sin(t * 6.0 + k))
+			draw_circle(c[0] + off, 62.0, Color(base, 0.30 * fade))
+		draw_circle(c[0], 70.0, Color(base, 0.35 * fade))
 	for r in rings:
 		var t: float = r[2] / 0.35
 		var rad: float = r[1] * (0.3 + 0.7 * t)

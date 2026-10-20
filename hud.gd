@@ -14,7 +14,7 @@ func _draw() -> void:
 	if game == null:
 		return
 	var font := ThemeDB.fallback_font
-	var sz := size
+	var sz := get_viewport_rect().size
 	var m := 36.0
 	var me: Fighter = game.fighters.get(game.local_id)
 	var t := int(maxf(game.time_left, 0.0))
@@ -42,7 +42,14 @@ func _draw() -> void:
 				ammo_txt = "  reloading..."
 		draw_string(font, Vector2(m, m + 48), String(w.name) + ammo_txt, HORIZONTAL_ALIGNMENT_LEFT, 360, 20, Color(1, 1, 0.8))
 		var nd := "inf" if bool(game.S.unl_nades) else str(me.nades)
-		draw_string(font, Vector2(m, m + 72), "Grenades %s   K %d  D %d" % [nd, me.kills, me.deaths], HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(1, 1, 1, 0.85))
+		var gn: String = ["Frag", "Sticky", "Smoke", "Gas"][me.gtype]
+		draw_string(font, Vector2(m, m + 72), "Grenades %s [%s]   K %d  D %d" % [nd, gn, me.kills, me.deaths], HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(1, 1, 1, 0.85))
+		var st := ""
+		if me.speed_t > 0.0: st += "SPEED  "
+		if me.shield_t > 0.0: st += "SHIELD  "
+		if me.dmg_t > 0.0: st += "DAMAGE x2"
+		if st != "":
+			draw_string(font, Vector2(m, m + 96), st, HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(0.6, 1, 0.8))
 		if not me.alive and not game.ended:
 			draw_string(font, Vector2(sz.x * 0.5 - 150, sz.y * 0.4), "Respawning in %d..." % int(ceil(maxf(me.respawn_t, 0.0))) if game.is_host else "Respawning...", HORIZONTAL_ALIGNMENT_CENTER, 300, 30, Color(1, 0.8, 0.6))
 	var y := 110.0

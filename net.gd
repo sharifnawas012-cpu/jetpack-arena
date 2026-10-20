@@ -306,6 +306,11 @@ func cli_left(id: int) -> void:
 		game.remove_fighter(id)
 
 @rpc("authority", "call_remote", "reliable")
+func cli_cloud(x: float, y: float, k: int) -> void:
+	if game != null:
+		game.fx.cloud(Vector2(x, y), k, 6.0 if k == 3 else 8.0)
+
+@rpc("authority", "call_remote", "reliable")
 func cli_pickup(x: float, y: float) -> void:
 	Sfx.play("pick", Vector2(x, y))
 

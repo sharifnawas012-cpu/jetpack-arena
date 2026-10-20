@@ -110,7 +110,7 @@ func _fmt(key: String, v: float) -> String:
 		"duration": return "%d:%02d" % [int(v) / 60, int(v) % 60]
 		"respawn": return "%.1fs" % v
 		"dmg_mult", "throw_power", "ui_scale", "volume", "touch_opacity": return "%.2f" % v
-		"view_w": return "%d" % int(v)
+		"zoom_w": return "%d" % int(v)
 	return "%d" % int(v)
 
 func _stepper(d: Dictionary, label: String, key: String, mn: float, mx: float, step: float) -> void:
@@ -401,7 +401,7 @@ func _settings() -> void:
 	_choice(d, "Touch controls", "touch", [[0, "Auto (touchscreens)"], [1, "Always on"], [2, "Off (keyboard+mouse)"]])
 	_stepper(d, "Touch button size", "ui_scale", 0.6, 1.6, 0.1)
 	_stepper(d, "Touch opacity", "touch_opacity", 0.2, 1.0, 0.1)
-	_stepper(d, "Zoom (view width, lower = closer)", "view_w", 700, 1600, 100)
+	_stepper(d, "Zoom (view width, lower = closer)", "zoom_w", 900, 2400, 100)
 	_choice(d, "Frame rate cap", "fps", [[30, "30 FPS (battery)"], [60, "60 FPS"], [0, "Unlimited"]])
 	_btn("Save & Back", func() -> void:
 		Cfg.save_prefs()
@@ -411,7 +411,7 @@ func _help() -> void:
 	screen = "help"
 	_clear()
 	_title("How To Play")
-	_lbl("TOUCH CONTROLS\n- Left stick: run. Push it UP to fly with the jetpack.\n- JET button: hold to hover/fly (with the left stick: up/down/forward/back).\n- JUMP: jump (double-jump in the air).\n- Right stick: aim. Push it all the way out to shoot.\n- FIRE: shoot in your last aim direction.\n- NADE: throw a grenade (works while flying).\n- SWAP: switch between your two weapons.\n- Walk over weapon crates to swap your current weapon.\n\nKEYBOARD + MOUSE (PC testing)\nA/D move, W or Shift = jetpack, S = down, Space = jump, mouse aims, left click shoots, right click / G grenade, Q/E or wheel swap weapon, Tab scoreboard, Esc pause.\n\nTips: jetpack fuel is unlimited by default and you cannot leave the arena. Toxic gas only hurts you while standing on the ground - fly over it!", content, 24)
+	_lbl("TOUCH CONTROLS\n- LEFT stick: run. Push UP to fly with the jetpack, DOWN to dive.\n- RIGHT stick: aim 360 degrees. Push it to shoot automatically.\n- JET: hold to hover/fly. JUMP: jump (double jump in air).\n- NADE: throw grenade. GREN: change grenade type (Frag / Sticky / Smoke / Gas).\n- MELEE: close-range hit. SWAP: switch weapon. ZOOM: zoom in/out.\n- Fly over weapon crates to swap weapons. Items: + health, S speed, O shield, X2 damage.\n\nKEYBOARD + MOUSE (PC)\nA/D move, W or Shift jetpack, S down, Space jump, mouse aims, left click shoots, G grenade, C grenade type, F melee, Q/E swap weapon, Z zoom, Tab scoreboard, Esc pause.\n\nUnlimited jetpack and ammo by default. You cannot leave the arena. Toxic gas only hurts on the ground (fly over it!).", content, 24)
 	_btn("Back", _main, content, 200)
 
 func _process(dt: float) -> void:

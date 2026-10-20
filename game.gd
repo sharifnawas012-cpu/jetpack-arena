@@ -30,6 +30,8 @@ class Bullet:
 	var radius := 0.0
 	var grav := 0.0
 	var wi := 0
+	var gt := 0
+	var stuck := false
 
 var S: Dictionary
 var map: Dictionary
@@ -64,6 +66,10 @@ var pause_ui: CanvasLayer
 var result_ui: CanvasLayer
 var fighter_root: Node2D
 var notice: Label
+var items: Array = []
+var clouds: Array = []
+var zoom_on := false
+var zoom_k := 1.0
 
 func _ready() -> void:
 	Net.game = self
@@ -89,6 +95,9 @@ func _ready() -> void:
 	add_child(fx)
 	for i in map.crates.size():
 		crates.append({"pos": map.crates[i], "w": -1, "t": 1.0 + i * 0.3})
+	for i in map.spawns.size():
+		if i % 3 == 1:
+			items.append({"pos": map.spawns[i] + Vector2(0, 8), "ty": -1, "t": 0.5 + items.size() * 0.4})
 	var idx := 0
 	for r in Net.roster:
 		var f := Fighter.new()
@@ -195,6 +204,9 @@ func _on_host_lost(reason: String) -> void:
 	notice.visible = true
 	get_tree().create_timer(2.0).timeout.connect(func() -> void: Net.quit_to_menu(reason))
 
+func toggle_zoom() -> void:
+	zoom_on = not zoom_on
+
 func toggle_pause() -> void:
 	pause_ui.visible = not pause_ui.visible
 	if not Net.online:
@@ -215,6 +227,9 @@ func _unhandled_input(e: InputEvent) -> void:
 			match e.keycode:
 				KEY_SPACE: queue_act(0)
 				KEY_G: queue_act(1)
+				KEY_F: queue_act(3)
+				KEY_C: queue_act(4)
+				KEY_Z: toggle_zoom()
 				KEY_Q, KEY_E: queue_act(2)
 				KEY_ESCAPE: toggle_pause()
 	elif e is InputEventMouseButton and e.pressed:
@@ -310,7 +325,8 @@ func _process(dt: float) -> void:
 		i -= 1
 	var me: Fighter = fighters.get(local_id)
 	if me != null and cam != null:
-		var vw := float(Cfg.prefs.view_w)
+		zoom_k = lerpf(zoom_k, 0.62 if zoom_on else 1.0, 1.0 - exp(-8.0 * dt))
+		var vw := float(Cfg.prefs.zoom_w) * zoom_k
 		var z := get_viewport_rect().size.x / vw
 		cam.zoom = Vector2(z, z)
 		cam.global_position = cam.global_position.lerp(me.pos, 1.0 - exp(-9.0 * dt))
@@ -333,6 +349,8 @@ func _host_step(dt: float) -> void:
 		_sim_fighter(f, dt)
 	_sim_bullets(dt)
 	_sim_crates(dt)
+	_sim_items(dt)
+	_sim_clouds(dt)
 
 func _client_step(dt: float) -> void:
 	var f: Fighter = fighters.get(local_id)
@@ -392,6 +410,10 @@ func _sim_fighter(f: Fighter, dt: float) -> void:
 	f.fire_cd = maxf(0.0, f.fire_cd - dt)
 	f.nade_cd = maxf(0.0, f.nade_cd - dt)
 	f.prot = maxf(0.0, f.prot - dt)
+	f.melee_cd = maxf(0.0, f.melee_cd - dt)
+	f.speed_t = maxf(0.0, f.speed_t - dt)
+	f.shield_t = maxf(0.0, f.shield_t - dt)
+	f.dmg_t = maxf(0.0, f.dmg_t - dt)
 	f.aim = float(f.inp.aim)
 	if f.reload_t > 0.0:
 		f.reload_t -= dt
@@ -404,6 +426,8 @@ func _sim_fighter(f: Fighter, dt: float) -> void:
 			2:
 				f.slot = 1 - f.slot
 				f.reload_t = 0.0
+			3: _melee(f)
+			4: f.gtype = (f.gtype + 1) % 4
 	al.clear()
 	_move(f, dt)
 	if bool(f.inp.fire) and f.fire_cd <= 0.0 and f.reload_t <= 0.0:
@@ -421,7 +445,7 @@ func _sim_fighter(f: Fighter, dt: float) -> void:
 func _move(f: Fighter, dt: float) -> void:
 	var inp: Dictionary = f.inp
 	var acc := 2200.0 if f.on_floor else 1100.0
-	f.vel.x = move_toward(f.vel.x, float(inp.mx) * RUN, acc * dt)
+	f.vel.x = move_toward(f.vel.x, float(inp.mx) * RUN * (1.45 if f.speed_t > 0.0 else 1.0), acc * dt)
 	var can_jet: bool = bool(S.unl_jet) or f.fuel > 0.0
 	f.jets = bool(inp.jet) and can_jet
 	if f.jets:
@@ -432,6 +456,8 @@ func _move(f: Fighter, dt: float) -> void:
 			f.fuel = maxf(0.0, f.fuel - 38.0 * dt)
 	else:
 		f.vel.y = minf(f.vel.y + GRAV * gravity_mul * dt, 900.0)
+		if float(inp.my) > 0.55 and not f.on_floor:
+			f.vel.y = minf(f.vel.y + 1400.0 * dt, 900.0)
 		if not bool(S.unl_jet) and f.on_floor:
 			f.fuel = minf(100.0, f.fuel + 30.0 * dt)
 	if f.on_floor:
@@ -503,7 +529,9 @@ func _fire(f: Fighter) -> void:
 		b.pos = mp
 		b.vel = d * float(w.speed)
 		b.life = float(w.life)
-		b.dmg = float(w.dmg)
+		b.dmg = float(w.dmg) * (2.0 if f.dmg_t > 0.0 else 1.0)
+		b.gt = 0
+		b.stuck = false
 		b.owner_id = f.id
 		b.team = f.team
 		b.kind = int(w.k)
@@ -528,14 +556,34 @@ func _throw_nade(f: Fighter) -> void:
 	var dir := Vector2.from_angle(f.aim)
 	b.pos = f.pos + dir * 20.0
 	b.vel = dir * 620.0 * float(S.throw_power) + f.vel * 0.4
-	b.life = 2.0
-	b.dmg = 85.0
-	b.radius = 110.0
+	b.gt = f.gtype
+	b.stuck = false
+	b.life = 2.0 if f.gtype < 2 else 1.4
+	b.dmg = (85.0 if f.gtype == 0 else 95.0) * (2.0 if f.dmg_t > 0.0 else 1.0)
+	b.radius = 110.0 if f.gtype == 0 else 90.0
 	b.owner_id = f.id
 	b.team = f.team
 	b.kind = Cfg.KIND_GRENADE
 	b.grav = 1300.0
 	b.wi = -1
+
+func _melee(f: Fighter) -> void:
+	if f.melee_cd > 0.0 or not f.alive:
+		return
+	f.melee_cd = 0.5
+	f.melee_t = 0.2
+	var dir := Vector2.from_angle(f.aim)
+	var c := f.pos + dir * 30.0
+	Sfx.play("heavy", f.pos)
+	for o: Fighter in fighters.values():
+		if o == f or not o.alive:
+			continue
+		if o.team == f.team and not bool(S.friendly_fire):
+			continue
+		if o.pos.distance_to(c) <= 38.0:
+			damage(o, 45.0 * float(S.dmg_mult) * (2.0 if f.dmg_t > 0.0 else 1.0), f.id, -3)
+			o.vel += dir * 380.0 + Vector2(0.0, -120.0)
+			fx.spark(o.pos, Color(1, 0.3, 0.2), 6)
 
 func _new_bullet() -> Bullet:
 	for b: Bullet in pool:
@@ -583,20 +631,87 @@ func _blocked(a: Vector2, b: Vector2) -> bool:
 	return false
 
 func _sim_grenade(b: Bullet, dt: float) -> void:
+	if b.stuck:
+		return
+	if b.gt == 1:
+		for f: Fighter in fighters.values():
+			if f.alive and f.id != b.owner_id and f.team != b.team and Rect2(f.pos - HALF, SIZE).has_point(b.pos):
+				b.stuck = true
+				b.vel = Vector2.ZERO
+				return
 	b.vel.y += b.grav * dt
 	var np := b.pos + Vector2(b.vel.x * dt, 0.0)
 	if _point_solid(np):
+		if b.gt == 1:
+			b.stuck = true
+			b.vel = Vector2.ZERO
+			return
 		b.vel.x *= -0.45
 	else:
 		b.pos.x = np.x
 	np = b.pos + Vector2(0.0, b.vel.y * dt)
 	if _point_solid(np):
+		if b.gt == 1:
+			b.stuck = true
+			b.vel = Vector2.ZERO
+			return
 		b.vel.y *= -0.35
 		b.vel.x *= 0.8
 		if absf(b.vel.y) < 40.0:
 			b.vel.y = 0.0
 	else:
 		b.pos.y = np.y
+
+func _grenade_end(b: Bullet) -> void:
+	match b.gt:
+		2: _make_cloud(b.pos, 2)
+		3: _make_cloud(b.pos, 3)
+		_: _explode(b.pos, b.radius, b.dmg, b.owner_id, b.team, b.wi)
+
+func _make_cloud(p: Vector2, kind: int) -> void:
+	var dur := 6.0 if kind == 3 else 8.0
+	clouds.append({"pos": p, "t": dur, "kind": kind})
+	fx.cloud(p, kind, dur)
+	if Net.online:
+		Net.rpc("cli_cloud", p.x, p.y, kind)
+
+func _sim_clouds(dt: float) -> void:
+	var i := clouds.size() - 1
+	while i >= 0:
+		var c: Dictionary = clouds[i]
+		c.t -= dt
+		if c.t <= 0.0:
+			clouds.remove_at(i)
+		elif int(c.kind) == 3 and bool(S.gas_damage) and not bool(S.gas_immune):
+			for f: Fighter in fighters.values():
+				if f.alive and f.prot <= 0.0 and f.pos.distance_to(c.pos) < 120.0:
+					f.gas_acc += 16.0 * dt
+					if f.gas_acc >= 1.0:
+						damage(f, f.gas_acc, 0, -2)
+						f.gas_acc = 0.0
+		i -= 1
+
+func _sim_items(dt: float) -> void:
+	for it in items:
+		if int(it.ty) < 0:
+			it.t -= dt
+			if it.t <= 0.0:
+				it.ty = randi() % 4
+			continue
+		var r := Rect2(Vector2(it.pos) - Vector2(14, 14), Vector2(28, 28))
+		for f: Fighter in fighters.values():
+			if f.alive and Rect2(f.pos - HALF, SIZE).intersects(r):
+				match int(it.ty):
+					0: f.hp = minf(float(S.health), f.hp + 50.0)
+					1: f.speed_t = 10.0
+					2: f.shield_t = 8.0
+					3: f.dmg_t = 12.0
+				Sfx.play("pick", it.pos)
+				if Net.online:
+					Net.rpc("cli_pickup", Vector2(it.pos).x, Vector2(it.pos).y)
+				it.ty = -1
+				it.t = 20.0
+				break
 
 func _sim_bullets(dt: float) -> void:
 	for b: Bullet in pool:
@@ -606,7 +721,7 @@ func _sim_bullets(dt: float) -> void:
 		if b.kind == Cfg.KIND_GRENADE:
 			_sim_grenade(b, dt)
 			if b.life <= 0.0:
-				_explode(b.pos, b.radius, b.dmg, b.owner_id, b.team, b.wi)
+				_grenade_end(b)
 				b.active = false
 			continue
 		if b.life <= 0.0:
@@ -679,6 +794,8 @@ func _explode(p: Vector2, r: float, dmg: float, owner_id: int, team: int, wi: in
 func damage(f: Fighter, amt: float, killer: int, wi: int) -> void:
 	if not f.alive or f.prot > 0.0 or ended:
 		return
+	if f.shield_t > 0.0:
+		amt *= 0.25
 	f.hp -= amt
 	f.hurt = 0.15
 	if f.hp > 0.0:
@@ -773,6 +890,8 @@ func _bot_think(f: Fighter, dt: float) -> void:
 		inp["my"] = 0.0
 		return
 	var to := tgt.pos - f.pos
+	if to.length() < 44.0 and f.melee_cd <= 0.0 and randf() < 0.08:
+		acts[f.id].append(3)
 	var err: float = [0.30, 0.13, 0.05][d]
 	inp["aim"] = to.angle() + sin(elapsed * 2.7 + float(f.id)) * err
 	var pref := 360.0
@@ -804,6 +923,11 @@ func _send_snapshot() -> void:
 		if f.flash > 0.0: flags |= 4
 		if f.prot > 0.0: flags |= 8
 		if f.on_floor: flags |= 16
+		if f.shield_t > 0.0: flags |= 32
+		if f.dmg_t > 0.0: flags |= 64
+		if f.speed_t > 0.0: flags |= 128
+		if f.melee_t > 0.0: flags |= 256
+		flags |= (f.gtype & 3) << 9
 		fs.push_back(float(id))
 		fs.push_back(f.pos.x)
 		fs.push_back(f.pos.y)
@@ -822,6 +946,8 @@ func _send_snapshot() -> void:
 	var cs := PackedInt32Array()
 	for c in crates:
 		cs.push_back(int(c.w))
+	for it in items:
+		cs.push_back(int(it.ty))
 	Net.rpc("cli_snap", fs, bs, cs)
 
 func apply_snapshot(fs: PackedFloat64Array, bs: PackedFloat32Array, cs: PackedInt32Array) -> void:
@@ -844,6 +970,12 @@ func apply_snapshot(fs: PackedFloat64Array, bs: PackedFloat32Array, cs: PackedIn
 					Sfx.play(String(Cfg.weapons[wsf].sfx), np)
 			f.prot = 1.0 if (flags & 8) != 0 else 0.0
 			f.on_floor = (flags & 16) != 0
+			f.shield_t = 1.0 if (flags & 32) != 0 else 0.0
+			f.dmg_t = 1.0 if (flags & 64) != 0 else 0.0
+			f.speed_t = 1.0 if (flags & 128) != 0 else 0.0
+			if (flags & 256) != 0 and f.melee_t <= 0.0:
+				f.melee_t = 0.2
+			f.gtype = (flags >> 9) & 3
 			f.hp = float(fs[i + 4])
 			f.cur_weapon = int(fs[i + 5])
 			f.tpos = np
@@ -863,6 +995,10 @@ func apply_snapshot(fs: PackedFloat64Array, bs: PackedFloat32Array, cs: PackedIn
 	view_age = 0.0
 	for k in mini(cs.size(), crates.size()):
 		crates[k].w = cs[k]
+	var nc := crates.size()
+	for k in items.size():
+		if nc + k < cs.size():
+			items[k].ty = cs[nc + k]
 
 func _send_state() -> void:
 	var kd := PackedInt32Array()
@@ -894,7 +1030,7 @@ func show_kill(killer: int, victim: int, wi: int) -> void:
 	var k: Fighter = fighters.get(killer)
 	if v == null:
 		return
-	var wn := "Grenade" if wi == -1 else ("Toxic gas" if wi == -2 else String(Cfg.weapons[wi].name))
+	var wn := "Grenade" if wi == -1 else ("Toxic gas" if wi == -2 else ("Melee" if wi == -3 else String(Cfg.weapons[wi].name)))
 	var txt := "%s died (%s)" % [v.pname, wn]
 	var col := v.color
 	if k != null and k != v:

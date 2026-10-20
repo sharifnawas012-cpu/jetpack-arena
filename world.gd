@@ -44,6 +44,13 @@ func _draw() -> void:
 				draw_circle(Vector2(rng.randf() * w, rng.randf() * h), rng.randf_range(1.0, 3.0), Color(1, 1, 1, rng.randf_range(0.3, 0.9)))
 			draw_circle(Vector2(w * 0.3, 330), 150, Color(0.25, 0.4, 0.8, 0.8))
 			draw_circle(Vector2(w * 0.3 - 40, 300), 100, Color(0.35, 0.55, 0.95, 0.5))
+	if dec == 6:
+		for i in 140:
+			draw_circle(Vector2(rng.randf() * w, rng.randf() * h), rng.randf_range(2.0, 5.0), Color(1, 1, 1, 0.55))
+	elif dec == 7:
+		draw_circle(Vector2(w * 0.78, 190), 100, Color(1, 0.95, 0.6, 0.7))
+		for i in 12:
+			draw_rect(Rect2(i * 220.0, h - 160.0 + sin(i) * 20.0, 160.0, 6.0), Color(1, 1, 1, 0.35))
 	for g in map.gas:
 		draw_rect(g, Color(0.3, 0.9, 0.2, 0.28))
 		draw_rect(g, Color(0.5, 1.0, 0.35, 0.7), false, 3.0)

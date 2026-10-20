@@ -35,6 +35,12 @@ var hurt := 0.0
 var kills := 0
 var deaths := 0
 var jump_req := false
+var gtype := 0
+var melee_cd := 0.0
+var melee_t := 0.0
+var shield_t := 0.0
+var dmg_t := 0.0
+var speed_t := 0.0
 var cur_weapon := 1
 var gas_acc := 0.0
 var inp: Dictionary = {"mx": 0.0, "my": 0.0, "jet": false, "fire": false, "aim": 0.0}
@@ -48,6 +54,7 @@ var bot_strafe := 1.0
 func _process(dt: float) -> void:
 	flash = maxf(0.0, flash - dt)
 	hurt = maxf(0.0, hurt - dt)
+	melee_t = maxf(0.0, melee_t - dt)
 	position = pos
 	if absf(cos(aim)) > 0.15:
 		facing = 1 if cos(aim) >= 0.0 else -1
@@ -93,6 +100,17 @@ func _draw() -> void:
 		draw_circle(o + dir * (wlen + 6.0), 6.0, Color(1, 0.9, 0.4, 0.9))
 	if prot > 0.0:
 		draw_arc(Vector2.ZERO, 27.0, 0.0, TAU, 24, Color(0.5, 0.85, 1.0, 0.75), 2.0)
+	if shield_t > 0.0:
+		draw_circle(Vector2.ZERO, 28.0, Color(0.3, 0.8, 1.0, 0.22))
+		draw_arc(Vector2.ZERO, 28.0, 0.0, TAU, 24, Color(0.4, 0.9, 1.0, 0.9), 3.0)
+	if dmg_t > 0.0:
+		draw_arc(Vector2.ZERO, 32.0, 0.0, TAU, 24, Color(1.0, 0.3, 0.2, 0.8), 2.0)
+	if speed_t > 0.0:
+		draw_line(Vector2(-fl * 16.0, 4.0), Vector2(-fl * 34.0, 4.0), Color(1, 1, 0.4, 0.8), 3.0)
+		draw_line(Vector2(-fl * 16.0, 12.0), Vector2(-fl * 30.0, 12.0), Color(1, 1, 0.4, 0.6), 3.0)
+	if melee_t > 0.0:
+		var a0 := aim - 0.9
+		draw_arc(Vector2(0, 2), 34.0, a0, a0 + 1.8, 10, Color(1, 1, 1, 0.9), 6.0)
 	var hpf := clampf(hp / 100.0, 0.0, 1.0)
 	draw_rect(Rect2(-16, -36, 32, 4), Color(0, 0, 0, 0.55))
 	draw_rect(Rect2(-16, -36, 32.0 * hpf, 4), Color(1.0 - hpf, 0.3 + 0.6 * hpf, 0.2))

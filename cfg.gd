@@ -17,7 +17,7 @@ const KIND_FLAME := 3
 var weapons: Array = []
 var maps: Array = []
 var prefs: Dictionary = {"name": "Player", "volume": 0.8, "ui_scale": 1.0, "touch": 0, "fps": 60,
-	"last_ip": "", "touch_opacity": 0.65, "view_w": 1100.0}
+	"last_ip": "", "touch_opacity": 0.75, "zoom_w": 1600.0}
 
 func _ready() -> void:
 	_load_weapons()
@@ -28,7 +28,7 @@ func _ready() -> void:
 func default_settings() -> Dictionary:
 	return {"mode": "ffa", "map": 0, "duration": 300, "kill_limit": 20, "respawn": 3.0, "health": 100,
 		"dmg_mult": 1.0, "max_players": 12, "bots": 4, "bot_diff": 1, "teams": 2, "friendly_fire": false,
-		"unl_ammo": true, "no_reload": false, "unl_nades": true, "unl_jet": true, "gas_damage": true,
+		"unl_ammo": true, "no_reload": true, "unl_nades": true, "unl_jet": true, "gas_damage": true,
 		"gas_immune": false, "self_damage": true, "throw_power": 1.0, "code": ""}
 
 func load_prefs() -> void:
@@ -123,3 +123,13 @@ func _build_maps() -> void:
 		[[100, 1000, 300, 26], [400, 800, 260, 26], [120, 600, 300, 26], [500, 430, 260, 26], [800, 260, 300, 26], [750, 1000, 26, 120]],
 		[[250, 960], [530, 760], [270, 560], [630, 390], [950, 220]],
 		[[250, 984], [530, 784], [950, 244]])
+	_mk("Snow Base", [Color("9fc4e8"), Color("e8f2fa"), Color("6b7f94"), Color("dfefff")], 1.0, 6,
+		[floor_r, [900, 800, 600, 28], [1000, 520, 400, 26]],
+		[[100, 950, 300, 28], [450, 820, 260, 28], [80, 640, 280, 28], [420, 500, 300, 28], [150, 340, 300, 28], [760, 1000, 60, 120]],
+		[[250, 910], [580, 780], [220, 600], [560, 460], [300, 300]],
+		[[230, 934], [580, 804], [300, 324]])
+	_mk("Island Battlefield", [Color("2a8fd0"), Color("bfe8f5"), Color("c9a96a"), Color("f2e2b0")], 0.9, 7,
+		[floor_r, [950, 900, 500, 28], [1000, 650, 400, 26]],
+		[[60, 1000, 360, 120], [500, 880, 240, 240], [150, 760, 260, 26], [560, 640, 260, 26], [120, 480, 300, 26], [540, 380, 260, 26]],
+		[[200, 960], [620, 840], [280, 720], [690, 600], [260, 440]],
+		[[200, 984], [620, 864], [260, 464]])
