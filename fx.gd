@@ -111,6 +111,21 @@ func _draw() -> void:
 		draw_circle(ip + Vector2(0, bob), 15.0, cols[ty])
 		draw_arc(ip + Vector2(0, bob), 15.0, 0.0, TAU, 20, Color(1, 1, 1, 0.9), 2.0)
 		draw_string(font, ip + Vector2(-15, 7 + bob), lab[ty], HORIZONTAL_ALIGNMENT_CENTER, 30, 18, Color(1, 1, 1))
+	for i in game.ctf_flags.size():
+		var fl: Dictionary = game.ctf_flags[i]
+		var col: Color = Cfg.TEAM_COLORS[i]
+		var home: Vector2 = fl.home
+		draw_circle(home + Vector2(0, 2), 36.0, Color(col, 0.16))
+		draw_arc(home + Vector2(0, 2), 36.0, 0.0, TAU, 28, Color(col, 0.75), 3.0)
+		var p: Vector2 = fl.pos
+		var carried: bool = int(fl.carrier) != -1
+		var h := 44.0 if carried else 66.0
+		var wv := sin(Time.get_ticks_msec() * 0.008 + i) * 5.0
+		draw_line(p, p + Vector2(0, -h), Color(0.12, 0.12, 0.15), 6.0)
+		draw_line(p, p + Vector2(0, -h), Color(0.75, 0.75, 0.8), 3.0)
+		var tri := PackedVector2Array([p + Vector2(3, -h), p + Vector2(42, -h + 10 + wv), p + Vector2(3, -h + 28)])
+		draw_colored_polygon(tri, col)
+		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), Color(0.1, 0.1, 0.14), 2.0)
 	for c in clouds:
 		var t: float = c[2] / c[3]
 		var base: Color = Color(0.75, 0.75, 0.78) if int(c[1]) == 2 else Color(0.4, 0.9, 0.25)

@@ -12,6 +12,7 @@ var found_box: VBoxContainer
 var lobby_box: VBoxContainer
 var _t := 0.0
 var scroll_ref: ScrollContainer
+var preview: Fighter
 
 func _ready() -> void:
 	var th := Theme.new()
@@ -71,6 +72,9 @@ func _clear() -> void:
 		c.queue_free()
 	if screen == "join":
 		Net.stop_listen()
+	if preview != null:
+		preview.queue_free()
+		preview = null
 	status = null
 	found_box = null
 	lobby_box = null
@@ -90,6 +94,7 @@ func _btn(text: String, cb: Callable, parent: Node, w: int = 340) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = Vector2(w, 66)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	b.pressed.connect(cb)
 	parent.add_child(b)
 	return b
@@ -135,7 +140,7 @@ func _stepper(d: Dictionary, label: String, key: String, mn: float, mx: float, s
 	bp.pressed.connect(func() -> void: f.call(step))
 	row.add_child(bp)
 
-func _choice(d: Dictionary, label: String, key: String, opts: Array) -> void:
+func _choice(d: Dictionary, label: String, key: String, opts: Array, cb: Callable = Callable()) -> void:
 	var row := _row(content)
 	var l := _lbl(label, row)
 	l.custom_minimum_size.x = 380
@@ -149,6 +154,8 @@ func _choice(d: Dictionary, label: String, key: String, opts: Array) -> void:
 		cur = (cur + delta + opts.size()) % opts.size()
 		d[key] = opts[cur][0]
 		vl.text = String(opts[cur][1])
+		if cb.is_valid():
+			cb.call()
 	var bm := Button.new()
 	bm.text = "<"
 	bm.custom_minimum_size = Vector2(70, 60)
@@ -191,6 +198,7 @@ func _main() -> void:
 	_btn("Local Multiplayer", _local_mp, g, 420)
 	_btn("Host Match", func() -> void: _form("host_new"), g, 420)
 	_btn("Join Match", _join, g, 420)
+	_btn("Character", _character, g, 420)
 	_btn("Settings", _settings, g, 420)
 	_btn("How To Play", _help, g, 420)
 	_btn("Exit", func() -> void: get_tree().quit(), g, 420)
@@ -221,7 +229,7 @@ func _form(mode: String) -> void:
 	var d := Net.settings
 	_title("Practice With Bots" if mode == "practice" else "Match Settings")
 	_choice(d, "Map", "map", maps)
-	_choice(d, "Game mode", "mode", [["ffa", "Free-for-all"], ["team", "Team Deathmatch"], ["custom", "Custom teams"]])
+	_choice(d, "Game mode", "mode", [["ffa", "Free-for-all"], ["team", "Team Deathmatch"], ["custom", "Custom teams"], ["ctf", "Capture the Flag"], ["survival", "Co-op Survival"]])
 	_stepper(d, "Teams (custom mode)", "teams", 2, 4, 1)
 	_stepper(d, "Bots", "bots", 0, 11, 1)
 	_choice(d, "Bot difficulty", "bot_diff", [[0, "Easy"], [1, "Normal"], [2, "Hard"]])
@@ -229,6 +237,7 @@ func _form(mode: String) -> void:
 		_stepper(d, "Max players", "max_players", 1, 12, 1)
 	_stepper(d, "Match time", "duration", 60, 1200, 60)
 	_stepper(d, "Kill limit", "kill_limit", 5, 100, 5)
+	_stepper(d, "Flag captures to win (CTF)", "cap_limit", 1, 10, 1)
 	_stepper(d, "Respawn delay", "respawn", 1, 10, 1)
 	_stepper(d, "Player health", "health", 50, 300, 25)
 	_stepper(d, "Weapon damage x", "dmg_mult", 0.25, 3.0, 0.25)
@@ -348,10 +357,10 @@ func _refresh_lobby() -> void:
 		lobby_box.remove_child(c)
 		c.queue_free()
 	var d := Net.settings
-	var mode_names := {"ffa": "Free-for-all", "team": "Team Deathmatch", "custom": "Custom teams"}
+	var mode_names := {"ffa": "Free-for-all", "team": "Team Deathmatch", "custom": "Custom teams", "ctf": "Capture the Flag", "survival": "Co-op Survival"}
 	_lbl("%s  |  %s  |  %d:%02d  |  first to %d  |  %d bots" % [Cfg.maps[int(d.map)].name, mode_names[d.mode], int(d.duration) / 60, int(d.duration) % 60, int(d.kill_limit), int(d.bots)], lobby_box, 22, Color(1, 1, 1, 0.8), true)
 	_lbl("Players (%d / %d)" % [Net.players.size(), int(d.max_players)], lobby_box, 26, Color("ffd36b"))
-	var team_mode := String(d.mode) != "ffa"
+	var team_mode := String(d.mode) != "ffa" and String(d.mode) != "survival"
 	var my_id := multiplayer.get_unique_id() if Net.online else 1
 	for id in Net.players.keys():
 		var p: Dictionary = Net.players[id]
@@ -383,6 +392,41 @@ func _refresh_lobby() -> void:
 func _on_lobby_changed() -> void:
 	if screen == "lobby":
 		_refresh_lobby()
+
+func _character() -> void:
+	screen = "char"
+	_clear()
+	_title("Your Soldier", "Others see your style in multiplayer")
+	var d := Cfg.prefs
+	var upd := func() -> void: _update_preview()
+	var names := ["Auto", "Red", "Blue", "Green", "Gold", "Purple", "Cyan", "Orange", "Pink", "Lime", "Steel", "White", "Brown"]
+	var col_opts: Array = []
+	for i in names.size():
+		col_opts.append([i, names[i]])
+	_choice(d, "Style", "style", [[0, "Combat helmet"], [1, "Cap"], [2, "Spiky hair"], [3, "Headset"]], upd)
+	_choice(d, "Skin", "skin", [[0, "Light"], [1, "Tan"], [2, "Dark"]], upd)
+	_choice(d, "Color (free-for-all)", "colr", col_opts, upd)
+	_btn("Save & Back", func() -> void:
+		Cfg.save_prefs()
+		_main(), content, 300)
+	preview = Fighter.new()
+	preview.alive = true
+	preview.show_overlay = false
+	preview.on_floor = true
+	preview.pos = Vector2(1000, 340)
+	preview.scale = Vector2(2.2, 2.2)
+	preview.aim = 0.25
+	add_child(preview)
+	_update_preview()
+
+func _update_preview() -> void:
+	if preview == null:
+		return
+	preview.style = int(Cfg.prefs.style)
+	preview.skin_i = int(Cfg.prefs.skin)
+	var c := int(Cfg.prefs.colr)
+	preview.color = Cfg.FFA_COLORS[c - 1] if c > 0 else Cfg.TEAM_COLORS[0]
+	preview.pname = ""
 
 func _settings() -> void:
 	screen = "settings"

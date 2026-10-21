@@ -19,9 +19,11 @@ func _draw() -> void:
 	var me: Fighter = game.fighters.get(game.local_id)
 	var t := int(maxf(game.time_left, 0.0))
 	draw_string(font, Vector2(sz.x * 0.5 - 60, m + 6), "%d:%02d" % [t / 60, t % 60], HORIZONTAL_ALIGNMENT_CENTER, 120, 32, Color.WHITE)
-	var limit := int(game.S.kill_limit)
-	if game.team_mode:
-		var tc: int = Net.team_count() if Net.online else (2 if String(game.S.mode) == "team" else int(game.S.teams))
+	var limit := int(game.S.cap_limit) if game.mode == "ctf" else int(game.S.kill_limit)
+	if game.mode == "survival":
+		draw_string(font, Vector2(sz.x * 0.5 - 100, m + 40), "WAVE %d   Kills %d" % [int(game.team_scores[10]), me.kills if me != null else 0], HORIZONTAL_ALIGNMENT_CENTER, 200, 22, Color(1, 0.85, 0.4))
+	elif game.team_mode:
+		var tc: int = 2 if (game.mode == "team" or game.mode == "ctf") else clampi(int(game.S.teams), 2, 4)
 		var x0 := sz.x * 0.5 - tc * 45.0
 		for i in tc:
 			draw_rect(Rect2(x0 + i * 90.0, m + 14, 84, 30), Color(Cfg.TEAM_COLORS[i], 0.85))
@@ -33,6 +35,13 @@ func _draw() -> void:
 		var hf := clampf(me.hp / maxf(1.0, float(game.S.health)), 0.0, 1.0)
 		draw_rect(Rect2(m + 2, m + 2, 256.0 * hf, 18), Color(1.0 - hf, 0.3 + 0.6 * hf, 0.2))
 		draw_string(font, Vector2(m + 6, m + 19), "HP %d" % int(me.hp), HORIZONTAL_ALIGNMENT_LEFT, 240, 16, Color.WHITE)
+		var ff := 1.0 if bool(game.S.unl_jet) else clampf(me.fuel / 100.0, 0.0, 1.0)
+		draw_rect(Rect2(m, m + 26, 260, 16), Color(0, 0, 0, 0.55))
+		draw_rect(Rect2(m + 2, m + 28, 256.0 * ff, 12), Color(0.3, 0.65, 1.0))
+		draw_string(font, Vector2(m + 6, m + 40), "JET", HORIZONTAL_ALIGNMENT_LEFT, 100, 13, Color.WHITE)
+		for cf in game.ctf_flags:
+			if int(cf.carrier) == game.local_id:
+				draw_string(font, Vector2(sz.x * 0.5 - 220, sz.y * 0.22), "YOU HAVE THE FLAG - bring it to your base!", HORIZONTAL_ALIGNMENT_CENTER, 440, 24, Color(1, 0.9, 0.4))
 		var w: Dictionary = Cfg.weapons[me.cur_weapon]
 		var ammo_txt := ""
 		if game.is_host and not bool(game.S.no_reload):
@@ -40,18 +49,18 @@ func _draw() -> void:
 			ammo_txt = "  %d/%s" % [me.ammo[me.slot], "inf" if res < 0 else str(res)]
 			if me.reload_t > 0.0:
 				ammo_txt = "  reloading..."
-		draw_string(font, Vector2(m, m + 48), String(w.name) + ammo_txt, HORIZONTAL_ALIGNMENT_LEFT, 360, 20, Color(1, 1, 0.8))
+		draw_string(font, Vector2(m, m + 70), String(w.name) + ammo_txt, HORIZONTAL_ALIGNMENT_LEFT, 360, 20, Color(1, 1, 0.8))
 		var nd := "inf" if bool(game.S.unl_nades) else str(me.nades)
 		var gn: String = ["Frag", "Sticky", "Smoke", "Gas"][me.gtype]
-		draw_string(font, Vector2(m, m + 72), "Grenades %s [%s]   K %d  D %d" % [nd, gn, me.kills, me.deaths], HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(1, 1, 1, 0.85))
+		draw_string(font, Vector2(m, m + 92), "Grenades %s [%s]   K %d  D %d" % [nd, gn, me.kills, me.deaths], HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(1, 1, 1, 0.85))
 		var st := ""
 		if me.speed_t > 0.0: st += "SPEED  "
 		if me.shield_t > 0.0: st += "SHIELD  "
 		if me.dmg_t > 0.0: st += "DAMAGE x2"
 		if st != "":
-			draw_string(font, Vector2(m, m + 96), st, HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(0.6, 1, 0.8))
+			draw_string(font, Vector2(m, m + 116), st, HORIZONTAL_ALIGNMENT_LEFT, 360, 18, Color(0.6, 1, 0.8))
 		if not me.alive and not game.ended:
-			draw_string(font, Vector2(sz.x * 0.5 - 150, sz.y * 0.4), "Respawning in %d..." % int(ceil(maxf(me.respawn_t, 0.0))) if game.is_host else "Respawning...", HORIZONTAL_ALIGNMENT_CENTER, 300, 30, Color(1, 0.8, 0.6))
+			draw_string(font, Vector2(sz.x * 0.5 - 150, sz.y * 0.4), ("Down! Wait for the next wave..." if me.respawn_t > 1e8 else "Respawning in %d..." % int(ceil(maxf(me.respawn_t, 0.0)))) if game.is_host else "Respawning...", HORIZONTAL_ALIGNMENT_CENTER, 300, 30, Color(1, 0.8, 0.6))
 	var y := 110.0
 	for e in game.feed:
 		var a := clampf(float(e[2]), 0.0, 1.0)

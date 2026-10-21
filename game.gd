@@ -67,6 +67,9 @@ var result_ui: CanvasLayer
 var fighter_root: Node2D
 var notice: Label
 var items: Array = []
+var mode := "ffa"
+var ctf_flags: Array = []
+var wave_t := 0.0
 var jet_acc := 0.0
 var clouds: Array = []
 var zoom_on := false
@@ -75,7 +78,8 @@ var zoom_k := 1.0
 func _ready() -> void:
 	Net.game = self
 	S = Net.match_settings
-	team_mode = String(S.mode) != "ffa"
+	mode = String(S.mode)
+	team_mode = mode != "ffa"
 	map = Cfg.maps[clampi(int(S.map), 0, Cfg.maps.size() - 1)]
 	solids = map.solids
 	gas_zones = map.gas
@@ -96,6 +100,12 @@ func _ready() -> void:
 	add_child(fx)
 	for i in map.crates.size():
 		crates.append({"pos": map.crates[i], "w": -1, "t": 1.0 + i * 0.3})
+	if mode == "ctf":
+		for i in 2:
+			var hp: Vector2 = map.spawns[i] + Vector2(0, 38)
+			ctf_flags.append({"home": hp, "pos": hp, "carrier": -1, "t": 0.0})
+	if mode == "survival":
+		wave_t = 3.0
 	for i in map.spawns.size():
 		if i % 3 == 1:
 			items.append({"pos": map.spawns[i] + Vector2(0, 8), "ty": -1, "t": 0.5 + items.size() * 0.4})
@@ -106,15 +116,21 @@ func _ready() -> void:
 		f.pname = String(r.name)
 		f.team = int(r.team)
 		f.is_bot = bool(r.bot)
-		f.color = Cfg.TEAM_COLORS[f.team % 4] if team_mode else Cfg.FFA_COLORS[idx % 12]
-		f.style = idx % 4
+		var colr := int(r.get("colr", 0))
+		f.color = Cfg.TEAM_COLORS[f.team % 4] if team_mode else (Cfg.FFA_COLORS[colr - 1] if colr > 0 else Cfg.FFA_COLORS[idx % 12])
+		f.style = int(r.get("style", idx % 4))
+		f.skin_i = int(r.get("skin", 0))
 		fighter_root.add_child(f)
 		fighters[f.id] = f
 		order.append(f.id)
 		acts[f.id] = []
 		idx += 1
 		if is_host:
-			_spawn(f)
+			if mode == "survival" and f.is_bot:
+				f.alive = false
+				f.respawn_t = 1e9
+			else:
+				_spawn(f)
 	if is_host:
 		for i in POOL_SIZE:
 			pool.append(Bullet.new())
@@ -359,6 +375,8 @@ func _host_step(dt: float) -> void:
 	_sim_crates(dt)
 	_sim_items(dt)
 	_sim_clouds(dt)
+	_sim_flags(dt)
+	_sim_survival(dt)
 
 func _client_step(dt: float) -> void:
 	var f: Fighter = fighters.get(local_id)
@@ -389,7 +407,13 @@ func _fill_loadout(f: Fighter) -> void:
 func _spawn(f: Fighter) -> void:
 	var best := Vector2(map.w * 0.5, map.h * 0.5)
 	var best_d := -1.0
-	var sps: Array = map.spawns
+	var sps: Array = []
+	if (team_mode and mode != "survival") or (mode == "survival" and f.team == 1):
+		for i in map.spawns.size():
+			if i % 2 == f.team % 2:
+				sps.append(map.spawns[i])
+	else:
+		sps = map.spawns
 	for i in 4:
 		var c: Vector2 = sps[randi() % sps.size()]
 		var md := 99999.0
@@ -811,22 +835,27 @@ func damage(f: Fighter, amt: float, killer: int, wi: int) -> void:
 	f.hp = 0.0
 	f.alive = false
 	f.deaths += 1
-	f.respawn_t = float(S.respawn)
+	f.respawn_t = 1e9 if mode == "survival" else float(S.respawn)
 	f.jets = false
 	var k: Fighter = fighters.get(killer)
 	if k != null and k != f:
+		var counts_team := mode == "team" or mode == "custom"
 		if k.team != f.team:
 			k.kills += 1
-			team_scores[k.team] += 1
+			if counts_team:
+				team_scores[k.team] += 1
 		else:
 			k.kills -= 1
-			team_scores[k.team] -= 1
+			if counts_team:
+				team_scores[k.team] -= 1
 	show_kill(killer, f.id, wi)
 	if Net.online:
 		Net.rpc("cli_kill", killer, f.id, wi)
 	_check_win()
 
 func _check_win() -> void:
+	if mode == "survival" or mode == "ctf":
+		return
 	var limit := int(S.kill_limit)
 	if team_mode:
 		for i in 4:
@@ -900,6 +929,7 @@ func _bot_think(f: Fighter, dt: float) -> void:
 				acts[f.id].append(1)
 		# where to go: health when hurt, otherwise weapons / power-ups when idle or far away
 		f.bot_has = false
+		f.bot_force = false
 		if f.hp < 40.0:
 			var bd := 1e9
 			for it in items:
@@ -907,6 +937,25 @@ func _bot_think(f: Fighter, dt: float) -> void:
 					bd = f.pos.distance_to(it.pos)
 					f.bot_dest = it.pos
 					f.bot_has = true
+		if mode == "ctf" and not f.bot_has and ctf_flags.size() == 2:
+			var ef: Dictionary = ctf_flags[1 - (f.team % 2)]
+			var og: Dictionary = ctf_flags[f.team % 2]
+			if int(ef.carrier) == f.id:
+				f.bot_dest = og.home
+				f.bot_has = true
+				f.bot_force = true
+			elif int(og.carrier) == -1 and Vector2(og.pos).distance_to(Vector2(og.home)) > 20.0:
+				f.bot_dest = og.pos
+				f.bot_has = true
+				f.bot_force = true
+			elif int(og.carrier) != -1 and fighters.has(int(og.carrier)):
+				f.bot_dest = fighters[int(og.carrier)].pos
+				f.bot_has = true
+				f.bot_force = true
+			elif int(ef.carrier) == -1 and (absi(f.id) % 3) != 0:
+				f.bot_dest = ef.pos
+				f.bot_has = true
+				f.bot_force = true
 		if not f.bot_has and (tf == null or best > 700.0):
 			var bd2 := 900.0
 			for c in crates:
@@ -952,7 +1001,7 @@ func _bot_think(f: Fighter, dt: float) -> void:
 		mx = -signf(to.x)
 		my = -0.6
 		jet = true
-	elif f.bot_has and (not have or f.hp < 40.0):
+	elif f.bot_has and (not have or f.hp < 40.0 or f.bot_force):
 		var dv := f.bot_dest - f.pos
 		mx = signf(dv.x) if absf(dv.x) > 24.0 else 0.0
 		jet = dv.y < -40.0 or f.bot_block
@@ -1017,6 +1066,10 @@ func _send_snapshot() -> void:
 		cs.push_back(int(c.w))
 	for it in items:
 		cs.push_back(int(it.ty))
+	for cf in ctf_flags:
+		cs.push_back(int(cf.carrier))
+		cs.push_back(int(Vector2(cf.pos).x))
+		cs.push_back(int(Vector2(cf.pos).y))
 	Net.rpc("cli_snap", fs, bs, cs)
 
 func apply_snapshot(fs: PackedFloat64Array, bs: PackedFloat32Array, cs: PackedInt32Array) -> void:
@@ -1068,6 +1121,11 @@ func apply_snapshot(fs: PackedFloat64Array, bs: PackedFloat32Array, cs: PackedIn
 	for k in items.size():
 		if nc + k < cs.size():
 			items[k].ty = cs[nc + k]
+	var fb := nc + items.size()
+	for k in ctf_flags.size():
+		if fb + k * 3 + 2 < cs.size():
+			ctf_flags[k].carrier = cs[fb + k * 3]
+			ctf_flags[k].pos = Vector2(cs[fb + k * 3 + 1], cs[fb + k * 3 + 2])
 
 func _send_state() -> void:
 	var kd := PackedInt32Array()
@@ -1110,6 +1168,96 @@ func show_kill(killer: int, victim: int, wi: int) -> void:
 		feed.pop_front()
 	Sfx.play("die", v.pos)
 
+func feed_add(text: String, col: Color, broadcast: bool = false) -> void:
+	feed.append([text, col, 4.0])
+	while feed.size() > 5:
+		feed.pop_front()
+	if broadcast and Net.online:
+		Net.rpc("cli_msg", text, col.to_html(false))
+
+func _sim_flags(dt: float) -> void:
+	if mode != "ctf" or ended or ctf_flags.size() < 2:
+		return
+	for i in 2:
+		var fl: Dictionary = ctf_flags[i]
+		if int(fl.carrier) != -1:
+			var c: Fighter = fighters.get(int(fl.carrier))
+			if c == null or not c.alive:
+				fl.carrier = -1
+				fl.t = 10.0
+			else:
+				fl.pos = c.pos + Vector2(0, -20)
+		elif Vector2(fl.pos).distance_to(Vector2(fl.home)) > 1.0:
+			fl.t -= dt
+			if fl.t <= 0.0:
+				fl.pos = fl.home
+				feed_add("%s flag returned" % Cfg.TEAM_NAMES[i], Cfg.TEAM_COLORS[i], true)
+		for f: Fighter in fighters.values():
+			if not f.alive or int(fl.carrier) != -1:
+				continue
+			if f.pos.distance_to(Vector2(fl.pos)) > 56.0:
+				continue
+			if f.team != i:
+				fl.carrier = f.id
+				feed_add("%s took the %s flag!" % [f.pname, Cfg.TEAM_NAMES[i]], Cfg.TEAM_COLORS[f.team % 4], true)
+				Sfx.play("pick", f.pos)
+			elif Vector2(fl.pos).distance_to(Vector2(fl.home)) > 1.0:
+				fl.pos = fl.home
+				feed_add("%s returned the flag" % f.pname, Cfg.TEAM_COLORS[i], true)
+	for f: Fighter in fighters.values():
+		if not f.alive:
+			continue
+		var ef: Dictionary = ctf_flags[1 - (f.team % 2)]
+		if int(ef.carrier) != f.id:
+			continue
+		var own: Dictionary = ctf_flags[f.team % 2]
+		if int(own.carrier) == -1 and Vector2(own.pos).distance_to(Vector2(own.home)) < 1.0 and f.pos.distance_to(Vector2(own.home)) < 60.0:
+			team_scores[f.team % 2] += 1
+			ef.carrier = -1
+			ef.pos = ef.home
+			feed_add("%s captured the flag!" % f.pname, Cfg.TEAM_COLORS[f.team % 4], true)
+			Sfx.play("pick", f.pos)
+			if team_scores[f.team % 2] >= int(S.cap_limit):
+				_finish()
+				return
+
+func _sim_survival(dt: float) -> void:
+	if mode != "survival" or ended:
+		return
+	var bots: Array = []
+	var humans: Array = []
+	for f: Fighter in fighters.values():
+		if f.is_bot:
+			bots.append(f)
+		else:
+			humans.append(f)
+	if wave_t > 0.0:
+		wave_t -= dt
+		if wave_t <= 0.0:
+			team_scores[10] += 1
+			var n := mini(bots.size(), 2 + int(team_scores[10]) * 2)
+			for k in bots.size():
+				if k < n:
+					bots[k].respawn_t = 0.3 + k * 0.5
+			for h in humans:
+				if not h.alive:
+					h.respawn_t = 0.5
+			feed_add("Wave %d!" % int(team_scores[10]), Color(1, 0.8, 0.3), true)
+		return
+	var any_bot := false
+	for b in bots:
+		if b.alive or b.respawn_t < 1e8:
+			any_bot = true
+	if not any_bot and int(team_scores[10]) > 0:
+		wave_t = 4.0
+		feed_add("Wave %d cleared!" % int(team_scores[10]), Color(0.5, 1, 0.5), true)
+	var any_human := false
+	for h in humans:
+		if h.alive or h.respawn_t < 1e8:
+			any_human = true
+	if not any_human:
+		_finish()
+
 func _finish() -> void:
 	if ended:
 		return
@@ -1133,6 +1281,8 @@ func _finish() -> void:
 			win = "%s team wins!" % Cfg.TEAM_NAMES[bt]
 	elif res.size() > 0 and (res.size() == 1 or res[0][3] > res[1][3]):
 		win = "%s wins!" % res[0][1]
+	if mode == "survival":
+		win = "Game over - you survived %d waves" % int(team_scores[10])
 	if Net.online:
 		Net.rpc("cli_end", res, win)
 	show_results(res, win)

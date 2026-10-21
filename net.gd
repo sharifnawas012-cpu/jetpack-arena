@@ -33,10 +33,15 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_conn_failed)
 	multiplayer.server_disconnected.connect(_on_server_gone)
 
+func _me(team: int) -> Dictionary:
+	return {"name": String(Cfg.prefs.name), "team": team, "style": int(Cfg.prefs.style), "skin": int(Cfg.prefs.skin), "colr": int(Cfg.prefs.colr)}
+
 func team_count() -> int:
 	match String(settings.mode):
 		"team": return 2
 		"custom": return clampi(int(settings.teams), 2, 4)
+		"ctf": return 2
+		"survival": return 1
 	return 1
 
 func local_ips() -> Array:
@@ -58,7 +63,7 @@ func host_game() -> int:
 	multiplayer.multiplayer_peer = _peer
 	online = true
 	is_host = true
-	players = {1: {"name": String(Cfg.prefs.name), "team": 0}}
+	players = {1: _me(0)}
 	_bc = PacketPeerUDP.new()
 	_bc.set_broadcast_enabled(true)
 	return OK
@@ -88,12 +93,12 @@ func leave() -> void:
 
 func start_solo() -> void:
 	leave()
-	players = {1: {"name": String(Cfg.prefs.name), "team": 0}}
+	players = {1: _me(0)}
 	is_host = true
 	start_match_host()
 
 func _on_connected() -> void:
-	rpc_id(1, "srv_hello", String(Cfg.prefs.name), join_code, Cfg.VERSION)
+	rpc_id(1, "srv_hello", String(Cfg.prefs.name), join_code, Cfg.VERSION, int(Cfg.prefs.style), int(Cfg.prefs.skin), int(Cfg.prefs.colr))
 
 func _on_conn_failed() -> void:
 	leave()
@@ -161,7 +166,7 @@ func set_team(id: int, t: int) -> void:
 
 # ------------------------------------------------------------- RPCs: lobby
 @rpc("any_peer", "call_remote", "reliable")
-func srv_hello(pname: String, code: String, ver: String) -> void:
+func srv_hello(pname: String, code: String, ver: String, style: int, skin: int, colr: int) -> void:
 	if not is_host:
 		return
 	var id := multiplayer.get_remote_sender_id()
@@ -180,7 +185,7 @@ func srv_hello(pname: String, code: String, ver: String) -> void:
 			if _peer != null:
 				_peer.disconnect_peer(id))
 		return
-	players[id] = {"name": _unique_name(pname), "team": _smallest_team()}
+	players[id] = {"name": _unique_name(pname), "team": _smallest_team(), "style": clampi(style, 0, 3), "skin": clampi(skin, 0, 2), "colr": clampi(colr, 0, 12)}
 	rpc_id(id, "cli_accept")
 	push_lobby()
 
@@ -206,25 +211,31 @@ func srv_team(t: int) -> void:
 
 # ------------------------------------------------------------- match start / end
 func start_match_host() -> void:
-	var team_mode := String(settings.mode) != "ffa"
-	var tc := team_count()
+	var mode := String(settings.mode)
+	var team_mode := mode != "ffa"
+	var tc := maxi(1, team_count())
 	roster = []
 	var counts: Array = [0, 0, 0, 0]
 	for id in players.keys():
 		var t: int = int(players[id].team) % tc if team_mode else roster.size()
 		if team_mode:
 			counts[t] += 1
-		roster.append({"id": id, "name": players[id].name, "team": t, "bot": false})
+		roster.append({"id": id, "name": players[id].name, "team": t, "bot": false,
+			"style": int(players[id].get("style", 0)), "skin": int(players[id].get("skin", 0)), "colr": int(players[id].get("colr", 0))})
 	var nbots := mini(int(settings.bots), Cfg.MAX_FIGHTERS - roster.size())
+	if mode == "survival":
+		nbots = clampi(maxi(int(settings.bots), 3), 1, Cfg.MAX_FIGHTERS - roster.size())
 	for i in maxi(0, nbots):
 		var t := roster.size()
-		if team_mode:
+		if mode == "survival":
+			t = 1
+		elif team_mode:
 			t = 0
 			for k in tc:
 				if counts[k] < counts[t]:
 					t = k
 			counts[t] += 1
-		roster.append({"id": -(i + 1), "name": "Bot %d" % (i + 1), "team": t, "bot": true})
+		roster.append({"id": -(i + 1), "name": "Bot %d" % (i + 1), "team": t, "bot": true, "style": i % 4, "skin": (i * 7) % 3, "colr": 0})
 	match_settings = settings.duplicate(true)
 	in_match = true
 	if online:
@@ -309,6 +320,11 @@ func cli_left(id: int) -> void:
 func cli_cloud(x: float, y: float, k: int) -> void:
 	if game != null:
 		game.fx.cloud(Vector2(x, y), k, 6.0 if k == 3 else 8.0)
+
+@rpc("authority", "call_remote", "reliable")
+func cli_msg(text: String, col: String) -> void:
+	if game != null:
+		game.feed_add(text, Color(col), false)
 
 @rpc("authority", "call_remote", "reliable")
 func cli_pickup(x: float, y: float) -> void:

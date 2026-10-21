@@ -27,3 +27,12 @@ Legend: DONE+TESTED = verified by headless automated run in the sandbox; DONE = 
 - Bots: fight each other and the player (11 bot-vs-bot kills in 25 s test), seek health/weapons/power-ups, retreat when hurt, dodge rockets/grenades, use gas/smoke/frag, melee: DONE (still no real pathfinding)
 - Melee, health packs, 3 power-ups, 4 grenade types, zoom, 8 maps: DONE
 - NOT DONE: Capture the Flag, Co-op Survival, crouch, drop-weapon button, dual-wield, control layout editor, character selection screen
+
+
+## Update 5 (headless tests + real rendered screenshots)
+- Doodle-style big-head soldiers, 4 styles x 3 skins x 12 colors, character selection screen with live preview; choice is sent to other players: DONE+TESTED
+- Capture the Flag (flags, pickup, carry, drop, return, capture, win; bots play it; team-side spawns): DONE+TESTED (single machine)
+- Co-op Survival (waves of bots, wave pause, game over when all humans down): DONE+TESTED (single machine)
+- HUD: health bar + jetpack bar: DONE
+- Still NOT DONE: crouch, drop-weapon button, dual-wield, control layout editor, real bot pathfinding, very large maps
+- Multiplayer of the new modes was not tested between two real devices (CTF/Survival state is synced through the existing snapshot/state messages).

@@ -14,6 +14,9 @@ var pname := ""
 var team := 0
 var color := Color.WHITE
 var style := 0
+var skin_i := 0
+var bot_force := false
+var show_overlay := true
 var is_bot := false
 var alive := false
 var hp := 100.0
@@ -180,7 +183,7 @@ func _draw_char(rot: float, dead: bool) -> void:
 	# ---- back arm (behind body)
 	var s := Vector2(-fl * 0.5, -6.0 + bob)
 	var dir := Vector2.from_angle(aim)
-	var skin: Color = SKIN[style % 3]
+	var skin: Color = SKIN[skin_i % 3]
 	var sleeve := color.darkened(0.15)
 	var two_hand := cur_weapon != 0
 	var hand_b := s + dir * 17.0 + Vector2(0, 1.5)
@@ -212,35 +215,44 @@ func _draw_char(rot: float, dead: bool) -> void:
 	draw_line(Vector2(-4.5, -9.0 + bob), Vector2(2.5, 4.0 + bob), color.darkened(0.35), 2.0)
 	draw_line(Vector2(4.5, -9.0 + bob), Vector2(-2.5, 4.0 + bob), color.darkened(0.35), 2.0)
 	draw_rect(Rect2(fl * 2.5 - 2.0, -2.0 + bob, 4.0, 3.2), color.darkened(0.25))
-	# ---- head
-	var hc := Vector2(fl * 0.6, -16.5 + bob)
-	draw_circle(hc, 8.6, OUT)
-	draw_circle(hc, 7.7, skin)
+	# ---- head (big doodle-style head)
+	var hc := Vector2(fl * 0.8, -19.0 + bob)
+	draw_circle(hc, 11.6, OUT)
+	draw_circle(hc, 10.3, skin)
 	var hcol := color.darkened(0.2)
 	var hair: Color = HAIR[style % 4]
 	match style % 4:
 		0:  # combat helmet + goggles
-			draw_colored_polygon(_dome(hc, 8.6, -0.1), hcol)
-			draw_rect(Rect2(hc.x - 8.6, hc.y - 1.2, 17.2, 2.2), hcol.darkened(0.3))
-			draw_rect(Rect2(hc.x + (0.5 if fl > 0.0 else -7.5), hc.y - 3.2, 7.0, 3.0), Color(0.1, 0.16, 0.28, 0.95))
-			draw_rect(Rect2(hc.x + (1.5 if fl > 0.0 else -6.5), hc.y - 2.8, 2.4, 1.0), Color(0.6, 0.85, 1.0, 0.8))
+			draw_colored_polygon(_dome(hc, 11.6, -0.1), OUT)
+			draw_colored_polygon(_dome(hc, 10.5, -0.1), hcol)
+			draw_rect(Rect2(hc.x - 11.0, hc.y - 1.6, 22.0, 2.8), hcol.darkened(0.3))
+			draw_rect(Rect2(hc.x + (0.5 if fl > 0.0 else -10.0), hc.y - 4.4, 9.5, 3.8), Color(0.1, 0.16, 0.28, 0.95))
+			draw_rect(Rect2(hc.x + (2.0 if fl > 0.0 else -8.0), hc.y - 3.8, 3.0, 1.2), Color(0.6, 0.85, 1.0, 0.85))
 		1:  # cap with peak
-			draw_colored_polygon(_dome(hc, 8.6, 0.0), color.lightened(0.05))
-			draw_rect(Rect2(hc.x + (3.0 if fl > 0.0 else -11.0), hc.y - 2.6, 8.0, 2.6), color.darkened(0.3))
+			draw_colored_polygon(_dome(hc, 11.6, 0.0), OUT)
+			draw_colored_polygon(_dome(hc, 10.5, 0.0), color.lightened(0.05))
+			draw_rect(Rect2(hc.x + (4.0 if fl > 0.0 else -15.0), hc.y - 3.6, 11.0, 3.6), OUT)
+			draw_rect(Rect2(hc.x + (4.6 if fl > 0.0 else -14.4), hc.y - 3.0, 9.8, 2.4), color.darkened(0.3))
 		2:  # spiky hair + bandana
 			for k in 5:
 				var ang := PI + 0.35 + k * 0.6
-				var p1 := hc + Vector2.from_angle(ang) * 7.0
-				var p2 := hc + Vector2.from_angle(ang) * 13.0
-				draw_colored_polygon(PackedVector2Array([p1 + Vector2(-2, 0), p2, p1 + Vector2(2, 0)]), hair)
-			draw_rect(Rect2(hc.x - 8.0, hc.y - 4.6, 16.0, 3.0), color.lightened(0.25))
+				var p1 := hc + Vector2.from_angle(ang) * 8.5
+				var p2 := hc + Vector2.from_angle(ang) * 16.0
+				draw_colored_polygon(PackedVector2Array([p1 + Vector2(-2.6, 0), p2, p1 + Vector2(2.6, 0)]), OUT)
+				draw_colored_polygon(PackedVector2Array([p1 + Vector2(-1.8, 0), p2 + (p1 - p2).normalized() * 1.6, p1 + Vector2(1.8, 0)]), hair)
+			draw_rect(Rect2(hc.x - 10.4, hc.y - 6.2, 20.8, 3.8), OUT)
+			draw_rect(Rect2(hc.x - 9.8, hc.y - 5.6, 19.6, 2.6), color.lightened(0.25))
 		3:  # headset + short hair
-			draw_colored_polygon(_dome(hc, 8.4, 0.35), hair)
-			draw_circle(hc + Vector2(-fl * 6.5, 0.5), 2.8, Color(0.2, 0.22, 0.28))
-			draw_line(hc + Vector2(fl * 4.5, 4.0), hc + Vector2(fl * 7.5, 6.5), Color(0.2, 0.22, 0.28), 1.5)
-	draw_circle(hc + Vector2(fl * 3.4, 0.6), 2.0, Color.WHITE)
-	draw_circle(hc + Vector2(fl * 4.0, 0.7), 1.0, Color(0.08, 0.08, 0.12))
-	draw_line(hc + Vector2(fl * 2.0, -1.8), hc + Vector2(fl * 5.2, -2.4), hair.darkened(0.3), 1.0)
+			draw_colored_polygon(_dome(hc, 11.4, 0.35), OUT)
+			draw_colored_polygon(_dome(hc, 10.4, 0.35), hair)
+			draw_circle(hc + Vector2(-fl * 8.0, 0.5), 3.6, OUT)
+			draw_circle(hc + Vector2(-fl * 8.0, 0.5), 2.8, Color(0.28, 0.3, 0.36))
+			draw_line(hc + Vector2(fl * 5.0, 5.0), hc + Vector2(fl * 9.0, 8.0), Color(0.2, 0.22, 0.28), 1.8)
+	draw_circle(hc + Vector2(fl * 4.4, 0.8), 3.2, OUT)
+	draw_circle(hc + Vector2(fl * 4.4, 0.8), 2.5, Color.WHITE)
+	draw_circle(hc + Vector2(fl * 5.2, 0.9), 1.3, Color(0.08, 0.08, 0.12))
+	draw_line(hc + Vector2(fl * 2.2, -2.6), hc + Vector2(fl * 6.4, -3.4), hair.darkened(0.3), 1.4)
+	draw_line(hc + Vector2(fl * 2.5, 6.0), hc + Vector2(fl * 6.5, 5.4), Color(0.35, 0.15, 0.12), 1.4)
 	# ---- weapon + front arm
 	if not dead:
 		var hand := s + dir * 9.0
@@ -360,6 +372,8 @@ func _draw_overlay() -> void:
 	if melee_t > 0.0:
 		var a0 := aim - 0.9
 		draw_arc(Vector2(0, -6), 68.0, a0, a0 + 1.8, 12, Color(1, 1, 1, 0.9), 7.0)
+	if not show_overlay:
+		return
 	var hpf := clampf(hp / 100.0, 0.0, 1.0)
 	draw_rect(Rect2(-26, -66, 52, 7), Color(0, 0, 0, 0.6))
 	draw_rect(Rect2(-25, -65, 50.0 * hpf, 5), Color(1.0 - hpf, 0.3 + 0.6 * hpf, 0.2))

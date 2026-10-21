@@ -17,7 +17,7 @@ const KIND_FLAME := 3
 var weapons: Array = []
 var maps: Array = []
 var prefs: Dictionary = {"name": "Player", "volume": 0.8, "ui_scale": 1.0, "touch": 0, "fps": 60,
-	"last_ip": "", "touch_opacity": 0.75, "zoom_w": 1350.0}
+	"last_ip": "", "touch_opacity": 0.75, "zoom_w": 1350.0, "style": 0, "skin": 0, "colr": 0}
 
 func _ready() -> void:
 	_load_weapons()
@@ -29,7 +29,7 @@ func default_settings() -> Dictionary:
 	return {"mode": "ffa", "map": 0, "duration": 300, "kill_limit": 20, "respawn": 3.0, "health": 100,
 		"dmg_mult": 1.0, "max_players": 12, "bots": 4, "bot_diff": 1, "teams": 2, "friendly_fire": false,
 		"unl_ammo": true, "no_reload": true, "unl_nades": true, "unl_jet": true, "gas_damage": true,
-		"gas_immune": false, "self_damage": true, "throw_power": 1.0, "code": ""}
+		"gas_immune": false, "self_damage": true, "throw_power": 1.0, "code": "", "cap_limit": 3}
 
 func load_prefs() -> void:
 	var cf := ConfigFile.new()
